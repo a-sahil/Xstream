@@ -1,0 +1,36 @@
+<!-- extension/popup.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SocioAgent Aptos</title>
+  <style>
+    body { font-family: sans-serif; width: 350px; padding: 10px; }
+    h2 { text-align: center; }
+    .info { margin-bottom: 15px; }
+    .label { font-weight: bold; }
+    .value { word-wrap: break-word; color: #0056b3; }
+    #status { text-align: center; color: #555; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h2>SocioAgent - Aptos Wallet</h2>
+  <div id="status">Please navigate to your X.com profile page.</div>
+  
+  <div id="userInfo" style="display: none;">
+    <div class="info">
+      <div class="label">Twitter Handle:</div>
+      <div class="value" id="twitterId"></div>
+    </div>
+    <div class="info">
+      <div class="label">Your Unique ID (UUID):</div>
+      <div class="value" id="uuid"></div>
+    </div>
+    <div class="info">
+      <div class="label">Your Aptos Wallet Address:</div>
+      <div class="value" id="aptosAddress"></div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

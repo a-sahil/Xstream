@@ -1,0 +1,25 @@
+/* extension/styles.css */
+
+#socio-agent-menu {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  transition: all 0.2s ease !important;
+}
+
+#socio-agent-menu:hover {
+  background: #1a8cd8 !important;
+  transform: scale(1.05) !important;
+}
+
+.socio-processing {
+  color: #657786 !important;
+  font-style: italic !important;
+}
+
+.socio-success {
+  color: #1d9bf0 !important;
+  font-weight: 600 !important;
+}
+
+.socio-error {
+  color: #f91880 !important;
+}

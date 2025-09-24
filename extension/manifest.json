@@ -1,12 +1,18 @@
 {
   "manifest_version": 3,
   "name": "SocioAgent for Aptos",
-  "version": "1.0",
-  "description": "Generates a UUID and Aptos wallet for your X/Twitter account.",
+  "version": "2.0",
+  "description": "Blockchain operations directly from Twitter using AI commands",
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "*://*.x.com/*",
+    "*://*.twitter.com/*",
+    "http://localhost:8000/*"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -17,7 +23,8 @@
   "content_scripts": [
     {
       "matches": ["*://*.x.com/*", "*://*.twitter.com/*"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "css": ["styles.css"]
     }
   ],
   "icons": {

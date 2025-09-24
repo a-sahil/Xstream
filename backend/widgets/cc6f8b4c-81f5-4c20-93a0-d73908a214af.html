@@ -1,0 +1,264 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donate to General Donation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .donation-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        .cause-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 15px;
+        }
+        .recipient-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .recipient-twitter {
+            font-size: 16px;
+            color: #1d9bf0;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .recipient-address {
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+            font-family: monospace;
+        }
+        .amount-selector {
+            margin: 20px 0;
+        }
+        .amount-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .amount-btn {
+            padding: 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .amount-btn:hover, .amount-btn.active {
+            border-color: #1d9bf0;
+            background: #1d9bf0;
+            color: white;
+        }
+        .custom-amount {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .custom-amount:focus {
+            outline: none;
+            border-color: #1d9bf0;
+        }
+        .donate-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #1d9bf0, #1565c0);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+        }
+        .donate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(29, 155, 240, 0.3);
+        }
+        .donate-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .wallet-status {
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .wallet-connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .wallet-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .powered-by {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+        .transaction-hash {
+            margin-top: 15px;
+            padding: 10px;
+            background: #d4edda;
+            border-radius: 8px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="donation-card">
+        <div class="cause-title">🎯 General Donation</div>
+        
+        <div class="recipient-info">
+            <div class="recipient-twitter">@0xyujitwts</div>
+            <div class="recipient-address">0xcc4750e0ebeee7e44c293d9c37ebe0f1060d98115870307a0de458edf6b04ba0</div>
+        </div>
+
+        <div id="walletStatus" class="wallet-status wallet-disconnected">
+            Connect your Petra Wallet to donate
+        </div>
+
+        <div class="amount-selector">
+            <div class="amount-buttons">
+                <button class="amount-btn" data-amount="0.1">0.1 APT</button>
+                <button class="amount-btn" data-amount="0.5">0.5 APT</button>
+                <button class="amount-btn" data-amount="1">1 APT</button>
+            </div>
+            <input type="number" class="custom-amount" placeholder="Custom amount (APT)" id="customAmount" step="0.01" min="0.01">
+        </div>
+
+        <button id="connectWallet" class="donate-btn">Connect Petra Wallet</button>
+        <button id="donateBtn" class="donate-btn" style="display: none;" disabled>Select Amount to Donate</button>
+
+        <div id="transactionResult"></div>
+
+        <div class="powered-by">
+            Powered by SocioAgent ⚡ Aptos
+        </div>
+    </div>
+
+    <script>
+        let selectedAmount = 0;
+        let walletConnected = false;
+        let walletAddress = null;
+
+        // Amount selection
+        document.querySelectorAll('.amount-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedAmount = parseFloat(btn.dataset.amount);
+                document.getElementById('customAmount').value = '';
+                updateDonateButton();
+            });
+        });
+
+        document.getElementById('customAmount').addEventListener('input', (e) => {
+            selectedAmount = parseFloat(e.target.value) || 0;
+            document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
+            updateDonateButton();
+        });
+
+        function updateDonateButton() {
+            const donateBtn = document.getElementById('donateBtn');
+            if (walletConnected && selectedAmount > 0) {
+                donateBtn.disabled = false;
+                donateBtn.textContent = `Donate ${selectedAmount} APT`;
+            } else if (walletConnected) {
+                donateBtn.disabled = true;
+                donateBtn.textContent = 'Select Amount to Donate';
+            }
+        }
+
+        // Wallet connection (simplified - in real implementation you'd use Petra Wallet SDK)
+        document.getElementById('connectWallet').addEventListener('click', async () => {
+            try {
+                // This is a placeholder for actual Petra Wallet connection
+                // In a real implementation, you'd integrate with the Petra Wallet SDK
+                
+                // Simulate wallet connection
+                walletConnected = true;
+                walletAddress = '0x' + Math.random().toString(16).substr(2, 40); // Mock address
+                
+                document.getElementById('walletStatus').textContent = `Connected: ${walletAddress.substr(0, 10)}...`;
+                document.getElementById('walletStatus').className = 'wallet-status wallet-connected';
+                
+                document.getElementById('connectWallet').style.display = 'none';
+                document.getElementById('donateBtn').style.display = 'block';
+                
+                updateDonateButton();
+            } catch (error) {
+                alert('Failed to connect wallet: ' + error.message);
+            }
+        });
+
+        // Donation transaction
+        document.getElementById('donateBtn').addEventListener('click', async () => {
+            if (!walletConnected || selectedAmount <= 0) return;
+
+            const donateBtn = document.getElementById('donateBtn');
+            const originalText = donateBtn.textContent;
+            donateBtn.disabled = true;
+            donateBtn.textContent = 'Processing...';
+
+            try {
+                // In a real implementation, this would use the Petra Wallet SDK to sign and submit the transaction
+                // For demo purposes, we'll simulate a successful transaction
+                
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate transaction time
+                
+                const mockTxHash = '0x' + Math.random().toString(16).substr(2, 64);
+                
+                document.getElementById('transactionResult').innerHTML = `
+                    <div class="transaction-hash">
+                        ✅ Donation successful!<br>
+                        Transaction: <a href="https://explorer.aptoslabs.com/txn/${mockTxHash}?network=testnet" target="_blank">${mockTxHash.substr(0, 20)}...</a>
+                    </div>
+                `;
+                
+                donateBtn.textContent = 'Thank you for your donation! 🙏';
+                
+            } catch (error) {
+                alert('Transaction failed: ' + error.message);
+                donateBtn.disabled = false;
+                donateBtn.textContent = originalText;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -252,16 +252,16 @@ Template CID: ${ipfsHash}`;
   }
 }
 
-// Replace your /template/:cid endpoint in backend/index.js with this version
+// Replace the existing app.get('/template/:cid', ...) in backend/index.js with this final version
 
 app.get('/template/:cid', async (req, res) => {
   const { cid } = req.params;
   
   try {
-    // Fetch template data from IPFS
     const templateData = await fetchFromIPFS(cid);
     
-    // Serve HTML page with improved Petra Wallet detection
+    // The HTML and CSS are unchanged, so they are omitted here for brevity.
+    // The only change is in the <script> tag at the bottom.
     res.send(`
 <!DOCTYPE html>
 <html lang="en">
@@ -434,6 +434,7 @@ app.get('/template/:cid', async (req, res) => {
             text-align: left;
             max-height: 100px;
             overflow-y: auto;
+            display: none; /* Hidden by default */
         }
     </style>
 </head>
@@ -441,61 +442,59 @@ app.get('/template/:cid', async (req, res) => {
     <div class="donation-container">
         <div class="title">${templateData.title}</div>
         <div class="description">${templateData.description}</div>
-        
         <div class="recipient-info">
             <div class="recipient-twitter">@${templateData.recipient.twitterHandle}</div>
             <div class="recipient-address">${templateData.recipient.walletAddress}</div>
         </div>
-
-        <div id="walletStatus" class="status disconnected">
-            Checking for Petra Wallet...
-        </div>
-
+        <div id="walletStatus" class="status disconnected">Checking for Petra Wallet...</div>
         <div id="petraInstall" class="install-petra" style="display: none;">
             Petra Wallet not found! <a href="https://chrome.google.com/webstore/detail/petra-aptos-wallet/ejjladinnckdgjemekebdpeokbikhfci" target="_blank">Install Petra Wallet</a>
         </div>
-
-        <div id="debugInfo" class="debug-info" style="display: none;"></div>
-
+        <div id="debugInfo" class="debug-info"></div>
         <div class="amount-buttons">
             ${templateData.suggestedAmounts.map(amount => 
                 `<button class="amount-btn" data-amount="${amount}">${amount} ${templateData.currency}</button>`
             ).join('')}
         </div>
-        
         <input type="number" class="custom-amount" placeholder="Custom amount (${templateData.currency})" 
                id="customAmount" step="0.01" min="${templateData.minimumAmount}">
-
         <button id="connectWallet" class="donate-btn" disabled>Checking Petra Wallet...</button>
         <button id="donateBtn" class="donate-btn" style="display: none;" disabled>Select Amount to Donate</button>
-
         <div id="transactionResult"></div>
-
-        <div class="powered-by">
-            Powered by SocioAgent ⚡ ${templateData.chain.toUpperCase()}
-        </div>
+        <div class="powered-by">Powered by SocioAgent ⚡ ${templateData.chain.toUpperCase()}</div>
     </div>
 
     <script>
         const templateData = ${JSON.stringify(templateData)};
         const RECIPIENT_ADDRESS = "${templateData.recipient.walletAddress}";
-        
         let selectedAmount = 0;
         let walletConnected = false;
         let walletAddress = null;
         let petraCheckAttempts = 0;
-        const maxAttempts = 20; // Check for 10 seconds
+        const maxAttempts = 20;
 
-        // Debug logging
         function addDebugLog(message) {
             console.log(message);
             const debugDiv = document.getElementById('debugInfo');
-            debugDiv.style.display = 'block';
-            debugDiv.innerHTML += message + '\\n';
+            if (debugDiv.style.display === 'none') debugDiv.style.display = 'block';
+            debugDiv.innerHTML += \`> \${message}\\n\`;
             debugDiv.scrollTop = debugDiv.scrollHeight;
         }
 
-        // Amount selection handlers
+        function handleWalletConnected(response) {
+            if (response && response.address) {
+                walletAddress = response.address;
+                walletConnected = true;
+                updateWalletStatus(\`Connected: \${walletAddress.substring(0, 10)}...\`, 'connected');
+                document.getElementById('connectWallet').style.display = 'none';
+                document.getElementById('donateBtn').style.display = 'block';
+                updateDonateButton();
+                addDebugLog(\`✅ Wallet connected successfully: \${walletAddress}\`);
+            } else {
+                throw new Error('No address returned from wallet');
+            }
+        }
+
         document.querySelectorAll('.amount-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
@@ -536,181 +535,83 @@ app.get('/template/:cid', async (req, res) => {
 
         function showSuccess(txHash) {
             const successDiv = document.getElementById('transactionResult');
-            successDiv.innerHTML = \`
-                <div class="transaction-hash">
-                    ✅ Donation successful!<br>
-                    <a href="https://explorer.aptoslabs.com/txn/\${txHash}?network=testnet" target="_blank">
-                        View Transaction: \${txHash.substring(0, 20)}...
-                    </a>
-                </div>
-            \`;
+            successDiv.innerHTML = \`<div class="transaction-hash">✅ Donation successful!<br><a href="https://explorer.aptoslabs.com/txn/\${txHash}?network=testnet" target="_blank">View Transaction: \${txHash.substring(0, 20)}...</a></div>\`;
         }
 
-        // Enhanced Petra wallet detection with retry mechanism
         function checkPetraWallet() {
-            addDebugLog(\`Checking for Petra wallet, attempt: \${petraCheckAttempts + 1}\`);
-            addDebugLog(\`window.aptos exists: \${!!window.aptos}\`);
-            
             if (window.aptos) {
-                addDebugLog('Petra wallet detected!');
-                document.getElementById('petraInstall').style.display = 'none';
-                document.getElementById('connectWallet').disabled = false;
-                document.getElementById('connectWallet').textContent = 'Connect Petra Wallet';
-                updateWalletStatus('Ready to connect', 'disconnected');
-                return true;
-            }
-            
-            petraCheckAttempts++;
-            if (petraCheckAttempts >= maxAttempts) {
-                addDebugLog('Petra wallet not found after maximum attempts');
-                document.getElementById('petraInstall').style.display = 'block';
-                document.getElementById('connectWallet').textContent = 'Install Petra Wallet First';
-                document.getElementById('connectWallet').disabled = true;
-                updateWalletStatus('Petra Wallet not installed', 'disconnected');
-                return false;
-            }
-            
-            // Continue checking
-            setTimeout(checkPetraWallet, 500);
-            return false;
-        }
-
-        // Enhanced wallet connection
-        document.getElementById('connectWallet').addEventListener('click', async () => {
-            if (!window.aptos) {
-                addDebugLog('Petra wallet not available at connection time');
-                document.getElementById('petraInstall').style.display = 'block';
-                showError('Petra Wallet not found. Please install and refresh the page.');
+                addDebugLog('✅ Petra wallet detected!');
+                const connectBtn = document.getElementById('connectWallet');
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'Connect Petra Wallet';
+                updateWalletStatus('Petra Wallet found. Ready to connect.', 'disconnected');
                 return;
             }
+            petraCheckAttempts++;
+            if (petraCheckAttempts < maxAttempts) {
+                setTimeout(checkPetraWallet, 500);
+            } else {
+                addDebugLog('❌ Petra wallet not found after all attempts.');
+                document.getElementById('petraInstall').style.display = 'block';
+            }
+        }
 
+        document.getElementById('connectWallet').addEventListener('click', async () => {
             try {
-                updateWalletStatus('Connecting to Petra Wallet...', 'connecting');
-                addDebugLog('Attempting to connect to Petra wallet...');
-                
-                const connectPromise = window.aptos.connect();
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Connection timeout')), 10000)
-                );
-                
-                const response = await Promise.race([connectPromise, timeoutPromise]);
-                addDebugLog(\`Wallet connection response: \${JSON.stringify(response)}\`);
-                
-                if (response && response.address) {
-                    walletAddress = response.address;
-                    walletConnected = true;
-                    
-                    updateWalletStatus(\`Connected: \${walletAddress.substring(0, 10)}...\`, 'connected');
-                    
-                    document.getElementById('connectWallet').style.display = 'none';
-                    document.getElementById('donateBtn').style.display = 'block';
-                    
-                    updateDonateButton();
-                    addDebugLog(\`Wallet connected successfully: \${walletAddress}\`);
-                } else {
-                    throw new Error('No address returned from wallet connection');
-                }
-                
+                updateWalletStatus('Connecting... Please check Petra.', 'connecting');
+                const response = await window.aptos.connect();
+                handleWalletConnected(response);
             } catch (error) {
-                addDebugLog(\`Wallet connection error: \${error.message}\`);
-                updateWalletStatus('Failed to connect wallet', 'disconnected');
-                
-                let errorMessage = 'Connection failed';
-                if (error.message.includes('User rejected') || error.message.includes('User declined')) {
-                    errorMessage = 'Connection rejected by user';
-                } else if (error.message.includes('timeout')) {
-                    errorMessage = 'Connection timeout - please try again';
-                } else if (error.message) {
-                    errorMessage = error.message;
-                }
-                
+                const errorMessage = (error.code === 4001) ? 'You rejected the connection request.' : error.message;
                 showError(errorMessage);
+                updateWalletStatus('Connection failed.', 'disconnected');
             }
         });
-
-        // Transaction handling (same as before but with debug logging)
+        
+        // --- MODIFIED DONATION LOGIC ---
         document.getElementById('donateBtn').addEventListener('click', async () => {
-            if (!walletConnected || selectedAmount < templateData.minimumAmount) {
-                showError('Please connect wallet and select a valid amount');
-                return;
-            }
-
-            if (!window.aptos) {
-                showError('Petra Wallet connection lost. Please refresh and reconnect.');
-                return;
-            }
-
+            if (!walletConnected || selectedAmount < templateData.minimumAmount) return;
             const donateBtn = document.getElementById('donateBtn');
             const originalText = donateBtn.textContent;
-            
             try {
                 donateBtn.disabled = true;
                 donateBtn.innerHTML = '<div class="loading"></div>Processing...';
                 
-                document.getElementById('transactionResult').innerHTML = '';
-
                 const amountInOctas = Math.floor(selectedAmount * 100000000);
                 
-                addDebugLog(\`Creating transaction: \${selectedAmount} APT to \${RECIPIENT_ADDRESS}\`);
-
-                const transaction = {
+                const payload = {
                     type: "entry_function_payload",
                     function: "0x1::aptos_account::transfer",
                     arguments: [RECIPIENT_ADDRESS, amountInOctas.toString()],
                     type_arguments: []
                 };
 
-                const txPromise = window.aptos.signAndSubmitTransaction(transaction);
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Transaction timeout')), 30000)
-                );
-                
-                const pendingTransaction = await Promise.race([txPromise, timeoutPromise]);
-                
-                addDebugLog(\`Transaction result: \${JSON.stringify(pendingTransaction)}\`);
+                // --- FIX: Add options object with a manual gas limit ---
+                const options = {
+                    max_gas_amount: 80000 // A safe gas limit for a simple transfer
+                };
 
+                // --- Pass both payload and options to the wallet ---
+                const pendingTransaction = await window.aptos.signAndSubmitTransaction(payload, options);
+                
                 if (pendingTransaction && pendingTransaction.hash) {
                     showSuccess(pendingTransaction.hash);
-                    updateWalletStatus(\`Connected: \${walletAddress.substring(0, 10)}...\`, 'connected');
-                    donateBtn.textContent = 'Thank you for your donation! 🙏';
+                    donateBtn.textContent = 'Thank you! 🙏';
                 } else {
-                    throw new Error('Transaction submission failed - no hash returned');
+                    throw new Error('Transaction failed.');
                 }
-                
             } catch (error) {
-                addDebugLog(\`Transaction error: \${error.message}\`);
-                
-                let errorMessage = 'Transaction failed';
-                if (error.message.includes('User rejected') || error.message.includes('User declined')) {
-                    errorMessage = 'Transaction rejected by user';
-                } else if (error.message.includes('Insufficient balance')) {
-                    errorMessage = 'Insufficient balance in wallet';
-                } else if (error.message.includes('timeout')) {
-                    errorMessage = 'Transaction timeout - please try again';
-                } else if (error.message) {
-                    errorMessage = error.message;
+                let errorMessage = error.message || 'Transaction failed.';
+                if (error.code === 4001 || (error.message && error.message.includes('User rejected'))) {
+                   errorMessage = 'You rejected the transaction in your wallet.';
                 }
-                
                 showError(errorMessage);
-                updateWalletStatus(\`Connected: \${walletAddress.substring(0, 10)}...\`, 'connected');
                 donateBtn.disabled = false;
                 donateBtn.textContent = originalText;
             }
         });
 
-        // Initialize everything
-        window.addEventListener('load', () => {
-            addDebugLog('Page loaded, starting initialization...');
-            setTimeout(() => {
-                checkPetraWallet();
-            }, 1000);
-        });
-
-        // Immediate check as well
-        setTimeout(() => {
-            addDebugLog('Immediate check...');
-            checkPetraWallet();
-        }, 100);
+        window.addEventListener('load', () => setTimeout(checkPetraWallet, 500));
     </script>
 </body>
 </html>
@@ -721,7 +622,6 @@ app.get('/template/:cid', async (req, res) => {
     res.status(500).send('Error loading donation template');
   }
 });
-
 // All other endpoints remain the same...
 app.post('/api/get-or-create-user', async (req, res) => {
   // Same as before...

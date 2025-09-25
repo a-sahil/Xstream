@@ -18,7 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 app.use(cors({
-  origin: ['https://x.com', 'https://twitter.com', 'https://www.x.com', 'https://www.twitter.com'],
+  origin: ['https://x.com', 'https://twitter.com', 'https://www.x.com', 'https://www.twitter.com', 'http://localhost:5173'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
@@ -758,6 +758,127 @@ app.post('/api/process-command', async (req, res) => {
     });
   }
 });
+
+
+app.post('/api/get-user-by-wallet', async (req, res) => {
+  const { aptosAddress, uuid } = req.body;
+
+  if (!aptosAddress || !uuid) {
+    return res.status(400).json({ message: 'Aptos address and UUID are required.' });
+  }
+
+  try {
+    const user = await User.findOne({ aptosAddress, uuid });
+
+    if (!user) {
+      return res.status(404).json({ message: 'No user found with the provided details.' });
+    }
+
+    return res.json({ twitterId: user.twitterId });
+
+  } catch (error) {
+    console.error('Error fetching user by wallet:', error);
+    return res.status(500).json({ message: 'An error occurred on the server.' });
+  }
+});
+// --- NEW ENDPOINT END ---
+
+app.get('/api/get-account-transactions/:address', async (req, res) => {
+  const { address } = req.params;
+  
+  if (!address) {
+    return res.status(400).json({ message: 'Aptos address is required.' });
+  }
+
+  try {
+    // Fetch the 25 most recent transactions for the account
+    const transactions = await aptos.getAccountTransactions({
+      accountAddress: address,
+      options: { limit: 25 }
+    });
+
+    // Parse each transaction to extract meaningful data
+    const parsedTransactions = transactions.map(tx => parseTransaction(tx, address));
+    
+    return res.json(parsedTransactions);
+
+  } catch (error) {
+    console.error('Error fetching account transactions:', error);
+    // Handle cases where the account may not exist on-chain yet
+    if (error.response && error.response.status === 404) {
+      return res.json([]); // Return empty array if account not found (has no transactions)
+    }
+    return res.status(500).json({ message: 'An error occurred while fetching transactions.' });
+  }
+});
+
+/**
+ * A helper function to parse raw Aptos transaction data into a simplified, readable format.
+ * This can be expanded to recognize more complex contract interactions.
+ */
+function parseTransaction(tx, ownerAddress) {
+  const baseDetails = {
+    hash: tx.hash,
+    success: tx.success,
+    timestamp: new Date(Number(tx.timestamp) / 1000).toISOString(),
+    version: tx.version,
+    gasUsed: tx.gas_used,
+  };
+
+  if (tx.type !== 'user_transaction') {
+    return { ...baseDetails, type: 'System', details: { name: tx.type } };
+  }
+
+  const { payload } = tx;
+  if (payload.type !== 'entry_function_payload') {
+    return { ...baseDetails, type: 'Unknown', details: { name: 'Unknown payload type' } };
+  }
+  
+  const func = payload.function;
+  
+  // 1. Transfer Logic
+  if (func === '0x1::aptos_account::transfer') {
+    const [recipient, amount] = payload.arguments;
+    const isSender = tx.sender.toLowerCase() === ownerAddress.toLowerCase();
+    return {
+      ...baseDetails,
+      type: isSender ? 'Send' : 'Receive',
+      details: {
+        from: tx.sender,
+        to: recipient,
+        amount: (amount / 10**8).toFixed(4) + ' APT',
+        direction: isSender ? 'out' : 'in',
+      },
+    };
+  }
+
+  // 2. Swap Logic (Placeholder - based on common DEX patterns)
+  // In a real-world scenario, you'd identify the function signatures for PanoraSwap or other DEXs.
+  if (func.includes('::swap::')) {
+     return {
+      ...baseDetails,
+      type: 'Swap',
+      details: {
+        contract: func.split('::')[0],
+        // Arguments would be parsed here to show tokens and amounts
+        summary: 'Token swap executed',
+      },
+    };
+  }
+
+  // Fallback for other contract interactions
+  const [contractAddress, module, funcName] = func.split('::');
+  return {
+    ...baseDetails,
+    type: 'Contract Interaction',
+    details: {
+      contract: contractAddress,
+      function: `${module}::${funcName}`,
+      summary: `Interacted with ${module} module`,
+    },
+  };
+}
+// --- NEW ENDPOINT END --
 
 // Other blockchain functions remain the same...
 async function getBalance(user) {

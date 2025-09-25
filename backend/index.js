@@ -8,6 +8,8 @@ require('dotenv').config();
 
 const connectDB = require('./db');
 const User = require('./models/User');
+// ... right after const User = require('./models/User');
+const { handleSwapCommand } = require('./agent-kit-handler');
 
 // Aptos SDK imports
 const { Account, Aptos, AptosConfig, Network, Ed25519PrivateKey } = require('@aptos-labs/ts-sdk');
@@ -74,6 +76,7 @@ async function fetchFromIPFS(cid) {
 }
 
 // NLP Command Processing Class (same as before)
+// NLP Command Processing Class (CORRECTED VERSION)
 class BlockchainCommandProcessor {
   constructor() {
     this.commandPatterns = {
@@ -95,7 +98,12 @@ class BlockchainCommandProcessor {
       donate: [
         /create.*donation.*template/i,
         /donation.*for.*(.+)/i
+      ],
+      // --- THIS PART WAS MISSING ---
+      swap: [
+        /swap\s+([\d.]+)\s+(\w+)\s+(?:for|to)\s+(\w+)/i
       ]
+      // --- END OF FIX ---
     };
   }
 
@@ -159,9 +167,27 @@ class BlockchainCommandProcessor {
       }
     }
 
+    // Check swap commands
+    for (const pattern of this.commandPatterns.swap) {
+      const match = cmd.match(pattern);
+      if (match) {
+        return {
+          type: 'swap',
+          params: {
+            amount: parseFloat(match[1]),
+            fromToken: match[2].toUpperCase(), // e.g., 'APT'
+            toToken: match[3].toUpperCase()      // e.g., 'USDC'
+          }
+        };
+      }
+    }
+
     return { type: 'unknown', params: {} };
   }
 }
+
+// ... inside the parseCommand method
+// ...
 
 const commandProcessor = new BlockchainCommandProcessor();
 
@@ -715,6 +741,10 @@ app.post('/api/process-command', async (req, res) => {
       case 'donate':
         response = await createDonationTemplate(parsedCommand.params, user);
         break;
+      case 'swap':
+      response = await handleSwapCommand(user, parsedCommand.params);
+      break;
+
       default:
         response = "I couldn't understand that command. Try commands like 'fetch my balance', 'send 0.1 APT to @username', or 'create donation template for Ukraine relief'.";
     }

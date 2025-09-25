@@ -64,7 +64,8 @@ function isBlockchainCommand(text) {
     'what is the price', 
     'price of', 
     'coin price',
-    'balance'
+    'balance',
+    'swap'
   ];
   
   const lowerText = text.toLowerCase();

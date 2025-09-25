@@ -18,7 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 app.use(cors({
-  origin: ['https://x.com', 'https://twitter.com', 'https://www.x.com', 'https://www.twitter.com', 'http://localhost:5173'],
+  origin: ['https://x.com', 'https://twitter.com', 'https://www.x.com', 'https://www.twitter.com', 'http://localhost:5173','http://localhost:8080'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
@@ -74,6 +74,38 @@ async function fetchFromIPFS(cid) {
     throw new Error('Failed to fetch from IPFS');
   }
 }
+
+// Helper function to get balance
+async function getWalletBalance(address) {
+  try {
+    const balance = await aptos.getAccountAPTAmount({ accountAddress: address });
+    // Convert from Octas to APT
+    const aptBalance = balance / 10**8;
+    return { balance: aptBalance.toFixed(4) };
+  } catch (error) {
+    console.error(`Error fetching balance for ${address}:`, error);
+    if (error.response && error.response.status === 404) {
+      // If the account is not found on-chain, it has a balance of 0
+      return { balance: '0.0000' };
+    }
+    throw error;
+  }
+}
+
+// NEW ENDPOINT for fetching wallet balance
+app.get('/api/get-balance/:address', async (req, res) => {
+  const { address } = req.params;
+  if (!address) {
+    return res.status(400).json({ message: 'Aptos address is required.' });
+  }
+  try {
+    const data = await getWalletBalance(address);
+    return res.json(data);
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to fetch wallet balance.' });
+  }
+});
+
 
 // NLP Command Processing Class (same as before)
 // NLP Command Processing Class (CORRECTED VERSION)
